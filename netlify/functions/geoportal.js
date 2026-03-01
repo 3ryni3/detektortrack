@@ -1,33 +1,29 @@
 // netlify/functions/geoportal.js
-// Proxy dla Geoportalu ULDK API – poprawiona wersja
+// Zaktualizowana wersja – obsługuje zarówno GetParcelById (id=) jak i GetParcelByXY (xy=)
 
 exports.handler = async (event) => {
   const params = event.queryStringParameters || {};
-  const id = params.id;
+  const { id, xy } = params;
 
-  if (!id) {
+  let url;
+
+  if (xy) {
+    // Kliknięcie działki na mapie – GetParcelByXY
+    // xy = "lng,lat,4326" (przekazane z frontendu)
+    url = `https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${encodeURIComponent(xy)}&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship`;
+  } else if (id) {
+    // Wyszukiwanie po identyfikatorze TERYT – GetParcelById
+    url = `https://uldk.gugik.gov.pl/?request=GetParcelById&id=${encodeURIComponent(id)}&result=geom_wkt`;
+  } else {
     return {
       statusCode: 400,
-      headers: { 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ error: 'Brak identyfikatora działki' })
+      body: 'Brakuje parametru id lub xy',
     };
   }
 
-  const url = `https://uldk.gugik.gov.pl/?request=GetParcelById&id=${encodeURIComponent(id)}&result=geom_wkt,teryt,voivodeship,county,commune,region,parcel&srid=4326`;
-
-  console.log('Zapytanie ULDK:', url);
-
   try {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 DetektorTrack/3.0',
-        'Accept': 'text/plain',
-      }
-    });
-
-    const text = await response.text();
-    console.log('Odpowiedź ULDK (pierwsze 300 znaków):', text.substring(0, 300));
-
+    const res = await fetch(url);
+    const text = await res.text();
     return {
       statusCode: 200,
       headers: {
@@ -36,12 +32,10 @@ exports.handler = async (event) => {
       },
       body: text,
     };
-  } catch (err) {
-    console.error('Błąd ULDK:', err);
+  } catch (e) {
     return {
       statusCode: 500,
-      headers: { 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ error: err.message }),
+      body: 'Błąd proxy: ' + e.message,
     };
   }
 };
