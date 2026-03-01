@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DetektorTrack</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DetektorTrack">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0f0e">
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root {
+  --bg:#0d0f0e; --surface:#161a18; --card:#1c2220; --border:#2a3330;
+  --accent:#c8a84b; --accent2:#4bc8a0; --danger:#c84b4b; --purple:#8b4bc8;
+  --text:#e8ede0; --muted:#7a8a80;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 14px;display:flex;align-items:center;gap:12px;z-index:1000;flex-shrink:0}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:var(--accent);line-height:1}
+.logo span{color:var(--accent2)}
+.logo small{font-size:10px;color:var(--muted);margin-left:6px}
+.gps-status{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted)}
+.gps-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background 0.3s}
+.gps-dot.active{background:var(--accent2);box-shadow:0 0 6px var(--accent2);animation:pulse 2s infinite}
+.gps-dot.error{background:var(--danger)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+#map{flex:1;z-index:1}
+
+.bottom-panel{background:var(--surface);border-top:1px solid var(--border);z-index:1000;flex-shrink:0}
+.tabs{display:flex;border-bottom:1px solid var(--border);overflow-x:auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:9px 10px;text-align:center;font-size:9px;font-family:'IBM Plex Mono',monospace;color:var(--muted);cursor:pointer;border:none;background:none;transition:all 0.2s;letter-spacing:0.5px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:60px}
+.tab svg{width:16px;height:16px}
+.tab.active{color:var(--accent);border-bottom:2px solid var(--accent)}
+
+.tab-content{display:none;padding:10px 14px;max-height:220px;overflow-y:auto}
+.tab-content.active{display:block}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;border-radius:4px;transition:all 0.15s;letter-spacing:0.5px}
+.btn:active{transform:scale(0.97)}
+.btn.primary{background:var(--accent);color:#0d0f0e;border-color:var(--accent);font-weight:600}
+.btn.success{background:var(--accent2);color:#0d0f0e;border-color:var(--accent2);font-weight:600}
+.btn.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn.pdf{background:var(--purple);color:#fff;border-color:var(--purple);font-weight:600}
+.btn.community-btn{background:#2a1f3d;color:#b088e8;border-color:#5a3f8a;font-weight:600}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap}
+
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:7px;text-align:center}
+.stat-val{font-size:17px;font-family:'Bebas Neue',sans-serif;color:var(--accent);letter-spacing:1px}
+.stat-label{font-size:8px;color:var(--muted);margin-top:1px}
+
+/* PARCEL SEARCH */
+.search-row{display:flex;gap:6px;margin-bottom:8px}
+.search-row input{flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px 10px;border-radius:4px;outline:none}
+.search-row input:focus{border-color:var(--accent)}
+.search-hint{font-size:9px;color:var(--muted);line-height:1.5;margin-bottom:8px}
+.parcel-result{background:var(--card);border:1px solid var(--accent);border-radius:4px;padding:8px 10px;font-size:10px;margin-top:6px;display:none}
+.parcel-result .pr-name{color:var(--accent);font-weight:600;margin-bottom:3px}
+.parcel-result .pr-info{color:var(--muted)}
+
+/* FINDS */
+.find-form{display:flex;flex-direction:column;gap:7px}
+.find-form input,.find-form select{background:var(--card);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:7px 10px;border-radius:4px;width:100%;outline:none}
+.find-form input:focus,.find-form select:focus{border-color:var(--accent)}
+.find-form .row2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.photo-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:9px;border:1px dashed var(--border);background:var(--card);color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;border-radius:4px;width:100%}
+.photo-preview{width:100%;max-height:70px;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:none}
+#photoInput{display:none}
+
+.finds-list{display:flex;flex-direction:column;gap:5px}
+.find-item{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--danger);border-radius:4px;padding:7px 10px;font-size:11px}
+.find-item-header{display:flex;align-items:center;gap:7px}
+.fi-name{flex:1;color:var(--text);font-weight:600}
+.fi-cat{font-size:9px;color:var(--muted)}
+.fi-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 3px}
+.fi-loc{cursor:pointer;color:var(--accent2);font-size:10px}
+.fi-thumb{width:32px;height:32px;object-fit:cover;border-radius:3px;border:1px solid var(--border);cursor:pointer}
+.find-meta{font-size:9px;color:var(--muted);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap}
+
+/* COMMUNITY */
+.community-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto}
+.community-item{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--purple);border-radius:4px;padding:7px 10px;font-size:10px}
+.ci-header{display:flex;gap:6px;align-items:center}
+.ci-name{flex:1;font-weight:600;color:var(--text)}
+.ci-nick{color:var(--purple);font-size:9px}
+.ci-meta{color:var(--muted);font-size:9px;margin-top:2px}
+.ci-loc{cursor:pointer;color:var(--accent2);font-size:10px}
+
+/* REPORT */
+.report-form{display:flex;flex-direction:column;gap:7px}
+.report-form input{background:var(--card);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:7px 10px;border-radius:4px;width:100%;outline:none}
+.report-form input:focus{border-color:var(--accent)}
+
+/* INSTRUCTIONS */
+.instr{font-size:10px;color:var(--muted);line-height:1.7}
+.instr h4{color:var(--accent);font-size:11px;margin:8px 0 3px}
+.instr .step{display:flex;gap:8px;margin-bottom:4px}
+.instr .step-num{color:var(--accent2);font-weight:600;flex-shrink:0}
+
+/* FILE INPUT */
+.file-label{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px dashed var(--border);background:var(--card);color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;cursor:pointer;border-radius:4px}
+#fileInput{display:none}
+
+.section-title{font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px}
+
+/* MAP FAB */
+.map-fab{position:absolute;right:10px;top:10px;z-index:500;display:flex;flex-direction:column;gap:6px}
+.fab-btn{width:38px;height:38px;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4);transition:all 0.15s}
+.fab-btn:active{transform:scale(0.95)}
+.fab-btn.active-state{background:var(--accent2);color:#0d0f0e;border-color:var(--accent2)}
+
+/* MODAL */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9998;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.modal.show{display:flex}
+.modal img{max-width:92vw;max-height:75vh;border-radius:6px}
+.modal-close{position:absolute;top:18px;right:18px;background:none;border:none;color:#fff;font-size:26px;cursor:pointer}
+
+/* TOAST */
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-10px);background:var(--accent);color:#0d0f0e;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:8px 16px;border-radius:4px;z-index:9999;opacity:0;transition:all 0.3s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* LOADING */
+.loading{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-left:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:9px;color:var(--muted);margin-top:8px}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:8px;height:8px;border-radius:50%}
+
+.leaflet-tile{filter:brightness(0.85) saturate(0.8)}
+.leaflet-control-attribution{display:none}
+.leaflet-control-zoom a{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
+select option{background:var(--card)}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">DETEKTOR<span>TRACK</span><small>v3</small></div>
+  <div class="gps-status">
+    <div class="gps-dot" id="gpsDot"></div>
+    <span id="gpsText">BRAK GPS</span>
+  </div>
+</header>
+
+<div id="map">
+  <div class="map-fab">
+    <div class="fab-btn" id="btnCenter" title="Wyśrodkuj">⊕</div>
+    <div class="fab-btn" id="btnTrackToggle" title="Nagrywaj ślad">⬤</div>
+    <div class="fab-btn" id="btnAddFind" title="Dodaj znalezisko">✦</div>
+  </div>
+</div>
+
+<div class="bottom-panel">
+  <div class="tabs">
+    <button class="tab active" data-tab="info">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      STATUS
+    </button>
+    <button class="tab" data-tab="parcel">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      DZIAŁKA
+    </button>
+    <button class="tab" data-tab="finds">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      ZNALEZISKA
+    </button>
+    <button class="tab" data-tab="community">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      SPOŁECZNOŚĆ
+    </button>
+    <button class="tab" data-tab="report">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      RAPORT
+    </button>
+    <button class="tab" data-tab="help">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      POMOC
+    </button>
+  </div>
+
+  <!-- STATUS -->
+  <div class="tab-content active" id="tab-info">
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-val" id="statDist">0</div><div class="stat-label">DYSTANS (m)</div></div>
+      <div class="stat-box"><div class="stat-val" id="statFinds">0</div><div class="stat-label">ZNALEZISKA</div></div>
+      <div class="stat-box"><div class="stat-val" id="statTime">00:00</div><div class="stat-label">CZAS SESJI</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="btnTrack">▶ START ŚLADU</button>
+      <button class="btn danger" id="btnClearTrack">✕ USUŃ ŚLAD</button>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#4bc8a0"></div>Ślad</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c84b4b"></div>Twoje znalezisko</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#8b4bc8"></div>Społeczność</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#c8a84b"></div>Działka</div>
+    </div>
+  </div>
+
+  <!-- DZIAŁKA SEARCH -->
+  <div class="tab-content" id="tab-parcel">
+    <div class="section-title">Szukaj działki z Geoportalu</div>
+    <div class="search-hint">
+      Podaj TERYT działki w formacie: <span style="color:var(--accent)">WWPPGGRROO.NUMER</span><br>
+      np. <span style="color:var(--accent2)">3209011.0003.18/1</span> (woj.32, pow.09, gm.011, obr.0003, nr 18/1)
+    </div>
+    <div class="search-row">
+      <input type="text" id="parcelId" placeholder="np. 3209011.0003.18/1" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="btn primary" id="btnSearchParcel">SZUKAJ</button>
+    </div>
+    <div class="parcel-result" id="parcelResult">
+      <div class="pr-name" id="prName"></div>
+      <div class="pr-info" id="prInfo"></div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn success" id="btnAddParcel">+ DODAJ DO MAPY</button>
+        <button class="btn" id="btnFitParcel">⊡ WYŚRODKUJ</button>
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <div class="section-title">Lub wgraj plik (KML / GeoJSON)</div>
+      <label class="file-label" for="fileInput">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Wybierz plik KML lub GeoJSON
+      </label>
+      <input type="file" id="fileInput" accept=".kml,.geojson,.json">
+      <div id="zoneInfo" style="margin-top:6px;font-size:10px;color:var(--muted)"></div>
+      <div class="btn-row" style="margin-top:6px">
+        <button class="btn danger" id="btnClearZone">✕ USUŃ DZIAŁKI</button>
+        <button class="btn" id="btnFitZone">⊡ POKAŻ WSZYSTKIE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINDS -->
+  <div class="tab-content" id="tab-finds">
+    <div class="section-title">Dodaj znalezisko</div>
+    <div class="find-form">
+      <div class="row2">
+        <input type="text" id="findName" placeholder="Nazwa znaleziska...">
+        <select id="findCat">
+          <option value="moneta">🪙 Moneta</option>
+          <option value="biżuteria">💍 Biżuteria</option>
+          <option value="militaria">⚔️ Militaria</option>
+          <option value="narzędzie">🔧 Narzędzie</option>
+          <option value="ceramika">🏺 Ceramika</option>
+          <option value="inne">❓ Inne</option>
+        </select>
+      </div>
+      <div class="row2">
+        <input type="number" id="findDepth" placeholder="Głębokość (cm)" min="0" max="100">
+        <input type="text" id="findNote" placeholder="Notatka...">
+      </div>
+      <label class="photo-btn" for="photoInput">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Zrób zdjęcie znaleziska
+      </label>
+      <input type="file" id="photoInput" accept="image/*" capture="environment">
+      <img id="photoPreview" class="photo-preview" alt="">
+      <div class="row2">
+        <button class="btn success" id="btnSaveFind">✦ ZAPISZ (GPS)</button>
+        <button class="btn community-btn" id="btnShareFind">⬆ UDOSTĘPNIJ</button>
+      </div>
+    </div>
+    <div class="section-title" style="margin-top:10px">Moje znaleziska (<span id="findsCount">0</span>)</div>
+    <div class="finds-list" id="findsList"></div>
+  </div>
+
+  <!-- COMMUNITY -->
+  <div class="tab-content" id="tab-community">
+    <div class="section-title">Wspólna mapa poszukiwaczy</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">
+      <input type="text" id="nicknameInput" placeholder="Twój nick (dla udostępniania)" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:7px 10px;border-radius:4px;outline:none">
+      <button class="btn" id="btnRefreshCommunity" style="flex-shrink:0">↻ ODŚWIEŻ</button>
+    </div>
+    <div class="section-title">Ostatnie znaleziska społeczności (<span id="communityCount">0</span>)</div>
+    <div class="community-list" id="communityList">
+      <div style="font-size:10px;color:var(--muted);padding:8px 0">Ładowanie...</div>
+    </div>
+  </div>
+
+  <!-- RAPORT -->
+  <div class="tab-content" id="tab-report">
+    <div class="section-title">Dane do raportu WKZ</div>
+    <div class="report-form">
+      <input type="text" id="rName" placeholder="Imię i nazwisko poszukiwacza">
+      <input type="text" id="rPermit" placeholder="Numer pozwolenia WKZ">
+      <input type="text" id="rParcel" placeholder="Nr działki / obręb / gmina">
+      <input type="text" id="rArea" placeholder="Miejscowość / gmina">
+      <button class="btn pdf" id="btnPDF">⬇ GENERUJ RAPORT PDF DLA WKZ</button>
+    </div>
+  </div>
+
+  <!-- POMOC -->
+  <div class="tab-content" id="tab-help">
+    <div class="instr">
+      <h4>🗺️ Jak znaleźć TERYT działki?</h4>
+      <div class="step"><span class="step-num">1.</span><span>Wejdź na <span style="color:var(--accent)">geoportal.gov.pl</span></span></div>
+      <div class="step"><span class="step-num">2.</span><span>Kliknij na działkę na mapie</span></div>
+      <div class="step"><span class="step-num">3.</span><span>W okienku znajdziesz numer TERYT np. <span style="color:var(--accent2)">3209011.0003.18/1</span></span></div>
+      <div class="step"><span class="step-num">4.</span><span>Wklej go w zakładce DZIAŁKA</span></div>
+
+      <h4>📡 Jak nagrywać ślad?</h4>
+      <div class="step"><span class="step-num">1.</span><span>Wejdź w zakładkę STATUS</span></div>
+      <div class="step"><span class="step-num">2.</span><span>Naciśnij ▶ START ŚLADU</span></div>
+      <div class="step"><span class="step-num">3.</span><span>Chodź po terenie – zielona linia pokaże gdzie byłeś</span></div>
+
+      <h4>✦ Jak dodać znalezisko?</h4>
+      <div class="step"><span class="step-num">1.</span><span>Stań w miejscu znaleziska</span></div>
+      <div class="step"><span class="step-num">2.</span><span>Zakładka ZNALEZISKA → wypełnij formularz</span></div>
+      <div class="step"><span class="step-num">3.</span><span>Zrób zdjęcie i naciśnij ZAPISZ</span></div>
+      <div class="step"><span class="step-num">4.</span><span>Naciśnij UDOSTĘPNIJ aby podzielić się z innymi</span></div>
+
+      <h4>📄 Raport dla WKZ</h4>
+      <div class="step"><span class="step-num">1.</span><span>Zakładka RAPORT → uzupełnij dane</span></div>
+      <div class="step"><span class="step-num">2.</span><span>Naciśnij GENERUJ PDF</span></div>
+      <div class="step"><span class="step-num">3.</span><span>Złóż do WKZ w ciągu 3 miesięcy od badań</span></div>
+
+      <h4>⚖️ Pamiętaj o prawie!</h4>
+      <div style="color:var(--danger);font-size:9px;line-height:1.6;margin-top:4px">
+        Poszukiwania bez zgody WKZ i właściciela terenu są przestępstwem (art. 109c ustawy o ochronie zabytków). Każde znalezisko zabytkowe należy zgłosić do WKZ.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Photo modal -->
+<div class="modal" id="photoModal">
+  <button class="modal-close" id="modalClose">✕</button>
+  <img id="modalImg" src="" alt="">
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const { jsPDF } = window.jspdf;
+
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+// Te wartości zostaną uzupełnione po wdrożeniu na Netlify
+const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8888/api' : '/api';
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let map, userMarker, accuracyCircle;
+let trackLine = null, trackPoints = [], isTracking = false;
+let finds = JSON.parse(localStorage.getItem('dt_finds_v3') || '[]');
+let findMarkers = [], communityMarkers = [];
+let zoneLayers = [];
+let currentParcelGeoJSON = null;
+let sessionStart = null, timerInterval = null, totalDistance = 0, lastPos = null;
+let currentPhoto = null;
+
+// ─── MAP ──────────────────────────────────────────────────────────────────────
+map = L.map('map', { zoomControl: true, attributionControl: false }).setView([52.0, 19.0], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
+
+const userIcon = L.divIcon({ className:'', html:`<div style="width:14px;height:14px;background:#4bc8a0;border:2px solid #fff;border-radius:50%;box-shadow:0 0 8px #4bc8a0;"></div>`, iconSize:[14,14], iconAnchor:[7,7] });
+const findIcon = L.divIcon({ className:'', html:`<div style="width:11px;height:11px;background:#c84b4b;border:2px solid #fff;border-radius:50%;box-shadow:0 0 5px #c84b4b;"></div>`, iconSize:[11,11], iconAnchor:[5,5] });
+const communityIcon = L.divIcon({ className:'', html:`<div style="width:11px;height:11px;background:#8b4bc8;border:2px solid #fff;border-radius:50%;box-shadow:0 0 5px #8b4bc8;"></div>`, iconSize:[11,11], iconAnchor:[5,5] });
+
+userMarker = L.marker([52,19], { icon: userIcon }).addTo(map);
+accuracyCircle = L.circle([52,19], { radius:10, color:'#4bc8a0', fillColor:'#4bc8a0', fillOpacity:0.1, weight:1 }).addTo(map);
+
+// ─── GPS ──────────────────────────────────────────────────────────────────────
+navigator.geolocation && navigator.geolocation.watchPosition(pos => {
+  const {latitude:lat, longitude:lng, accuracy} = pos.coords;
+  userMarker.setLatLng([lat,lng]);
+  accuracyCircle.setLatLng([lat,lng]).setRadius(accuracy);
+  document.getElementById('gpsDot').className = 'gps-dot active';
+  document.getElementById('gpsText').textContent = `±${Math.round(accuracy)}m`;
+  if (isTracking) {
+    trackPoints.push([lat,lng]);
+    trackLine.setLatLngs(trackPoints);
+    if (lastPos) { totalDistance += map.distance([lastPos.lat,lastPos.lng],[lat,lng]); document.getElementById('statDist').textContent = Math.round(totalDistance); }
+    lastPos = {lat,lng};
+  }
+}, () => { document.getElementById('gpsDot').className='gps-dot error'; document.getElementById('gpsText').textContent='BŁĄD GPS'; },
+{ enableHighAccuracy:true, maximumAge:3000, timeout:10000 });
+
+// ─── TRACKING ─────────────────────────────────────────────────────────────────
+function toggleTracking() {
+  isTracking = !isTracking;
+  const btn = document.getElementById('btnTrack');
+  const fab = document.getElementById('btnTrackToggle');
+  if (isTracking) {
+    if (!trackLine) trackLine = L.polyline([], { color:'#4bc8a0', weight:3, opacity:0.9 }).addTo(map);
+    trackPoints=[]; totalDistance=0; lastPos=null;
+    sessionStart=Date.now();
+    timerInterval=setInterval(()=>{
+      const e=Math.floor((Date.now()-sessionStart)/1000);
+      document.getElementById('statTime').textContent=`${String(Math.floor(e/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`;
+    },1000);
+    btn.className='btn danger'; btn.textContent='■ STOP ŚLADU';
+    fab.className='fab-btn active-state';
+    showToast('Nagrywanie START');
+  } else {
+    clearInterval(timerInterval);
+    btn.className='btn primary'; btn.textContent='▶ START ŚLADU';
+    fab.className='fab-btn';
+    showToast(`Ślad: ${Math.round(totalDistance)}m`);
+  }
+}
+document.getElementById('btnTrack').addEventListener('click', toggleTracking);
+document.getElementById('btnTrackToggle').addEventListener('click', toggleTracking);
+document.getElementById('btnClearTrack').addEventListener('click', () => {
+  if (trackLine) { map.removeLayer(trackLine); trackLine=null; }
+  trackPoints=[]; totalDistance=0; lastPos=null;
+  document.getElementById('statDist').textContent='0';
+  document.getElementById('statTime').textContent='00:00';
+  showToast('Ślad usunięty');
+});
+document.getElementById('btnCenter').addEventListener('click', () => map.setView(userMarker.getLatLng(), 17));
+
+// ─── PARCEL SEARCH ────────────────────────────────────────────────────────────
+let currentParcelLayer = null;
+
+document.getElementById('btnSearchParcel').addEventListener('click', searchParcel);
+document.getElementById('parcelId').addEventListener('keydown', e => { if (e.key==='Enter') searchParcel(); });
+
+async function searchParcel() {
+  const id = document.getElementById('parcelId').value.trim();
+  if (!id) { showToast('Podaj TERYT działki'); return; }
+  const btn = document.getElementById('btnSearchParcel');
+  btn.innerHTML = 'SZUKAJ<span class="loading"></span>';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/geoportal?id=${encodeURIComponent(id)}`);
+    const text = await res.text();
+    const lines = text.trim().split('\n');
+    if (lines[0] === '0' && lines.length > 1) {
+      // Parse WKT geometry from ULDK response
+      const data = lines[1].split(';');
+      const wkt = data[0];
+      const teryt = data[1] || id;
+      const voiv = data[2] || '';
+      const county = data[3] || '';
+      const commune = data[4] || '';
+      const parcelNum = data[6] || id;
+
+      // Convert WKT Polygon to GeoJSON
+      const geojson = wktPolygonToGeoJSON(wkt);
+      if (geojson) {
+        currentParcelGeoJSON = geojson;
+        document.getElementById('prName').textContent = `Działka: ${parcelNum}`;
+        document.getElementById('prInfo').textContent = `${commune}, ${county}, ${voiv}`;
+        document.getElementById('parcelResult').style.display = 'block';
+        showToast('Działka znaleziona!');
+      } else {
+        showToast('Nie można przetworzyć geometrii');
+      }
+    } else {
+      showToast('Nie znaleziono działki – sprawdź TERYT');
+    }
+  } catch(e) {
+    showToast('Błąd połączenia z Geoportalem');
+  }
+  btn.innerHTML = 'SZUKAJ'; btn.disabled = false;
+}
+
+function wktPolygonToGeoJSON(wkt) {
+  try {
+    const match = wkt.match(/POLYGON\s*\(\((.+)\)\)/i) || wkt.match(/MULTIPOLYGON\s*\(\(\((.+)\)\)\)/i);
+    if (!match) return null;
+    const coords = match[1].split(',').map(pair => {
+      const [x, y] = pair.trim().split(/\s+/);
+      return [parseFloat(x), parseFloat(y)];
+    });
+    return { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{} };
+  } catch(e) { return null; }
+}
+
+document.getElementById('btnAddParcel').addEventListener('click', () => {
+  if (!currentParcelGeoJSON) return;
+  if (currentParcelLayer) map.removeLayer(currentParcelLayer);
+  currentParcelLayer = L.geoJSON(currentParcelGeoJSON, { style:{ color:'#c8a84b', weight:2, fillOpacity:0.08, dashArray:'6 4' } }).addTo(map);
+  zoneLayers.push(currentParcelLayer);
+  map.fitBounds(currentParcelLayer.getBounds(), { padding:[20,20] });
+  showToast('Działka dodana do mapy');
+});
+
+document.getElementById('btnFitParcel').addEventListener('click', () => {
+  if (currentParcelLayer) map.fitBounds(currentParcelLayer.getBounds(), { padding:[20,20] });
+});
+
+// File import
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const geojson = file.name.endsWith('.kml') ? kmlToGeoJSON(new DOMParser().parseFromString(ev.target.result,'text/xml')) : JSON.parse(ev.target.result);
+      const layer = L.geoJSON(geojson, { style:{ color:'#c8a84b', weight:2, fillOpacity:0.08, dashArray:'6 4' } }).addTo(map);
+      zoneLayers.push(layer);
+      map.fitBounds(layer.getBounds(), { padding:[20,20] });
+      document.getElementById('zoneInfo').textContent = `✓ ${file.name}`;
+      showToast('Działka wczytana!');
+    } catch(e) { showToast('Błąd pliku'); }
+  };
+  reader.readAsText(file);
+});
+
+function kmlToGeoJSON(kml) {
+  const features = [];
+  kml.querySelectorAll('Placemark').forEach(p => {
+    const poly = p.querySelector('Polygon outerBoundaryIs coordinates');
+    if (poly) { const pts = poly.textContent.trim().split(/\s+/).map(c=>{ const x=c.split(','); return [parseFloat(x[0]),parseFloat(x[1])]; }); features.push({type:'Feature',geometry:{type:'Polygon',coordinates:[pts]},properties:{}}); }
+  });
+  return {type:'FeatureCollection',features};
+}
+
+document.getElementById('btnClearZone').addEventListener('click', () => {
+  zoneLayers.forEach(l => map.removeLayer(l)); zoneLayers=[]; currentParcelLayer=null;
+  document.getElementById('zoneInfo').textContent='';
+  document.getElementById('parcelResult').style.display='none';
+  showToast('Działki usunięte');
+});
+document.getElementById('btnFitZone').addEventListener('click', () => {
+  if (zoneLayers.length) { const group = L.featureGroup(zoneLayers); map.fitBounds(group.getBounds(),{padding:[20,20]}); }
+});
+
+// ─── PHOTO ────────────────────────────────────────────────────────────────────
+document.getElementById('photoInput').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    currentPhoto = ev.target.result;
+    const prev = document.getElementById('photoPreview');
+    prev.src=currentPhoto; prev.style.display='block';
+    document.querySelector('.photo-btn').innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Zmień zdjęcie`;
+  };
+  reader.readAsDataURL(file);
+});
+
+// ─── FINDS ────────────────────────────────────────────────────────────────────
+function saveFindToMap(f) {
+  const m = L.marker([f.lat,f.lng],{icon:findIcon}).addTo(map)
+    .bindPopup(`<b style="color:#c84b4b">${f.name}</b><br><small>${f.cat}</small>${f.depth?'<br>↓'+f.depth+'cm':''}${f.note?'<br>'+f.note:''}`);
+  findMarkers.push({id:f.id,marker:m});
+}
+
+function renderFinds() {
+  const list = document.getElementById('findsList');
+  list.innerHTML='';
+  document.getElementById('findsCount').textContent=finds.length;
+  document.getElementById('statFinds').textContent=finds.length;
+  finds.forEach(f=>{
+    const div=document.createElement('div'); div.className='find-item';
+    div.innerHTML=`<div class="find-item-header">${f.photo?`<img class="fi-thumb" src="${f.photo}" data-id="${f.id}">`:''}
+      <div style="flex:1"><div class="fi-name">${f.name}</div><div class="fi-cat">${f.cat}</div></div>
+      <span class="fi-loc" data-id="${f.id}">📍</span>
+      <button class="fi-del" data-id="${f.id}">✕</button></div>
+      <div class="find-meta"><span>${new Date(f.ts).toLocaleTimeString('pl')}</span>${f.depth?`<span>↓ ${f.depth}cm</span>`:''}<span>${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}</span></div>`;
+    list.appendChild(div);
+  });
+  list.querySelectorAll('.fi-del').forEach(btn=>btn.addEventListener('click',e=>{
+    const id=e.target.dataset.id;
+    finds=finds.filter(f=>f.id!==id);
+    const mi=findMarkers.find(m=>m.id===id);
+    if(mi){map.removeLayer(mi.marker);findMarkers=findMarkers.filter(m=>m.id!==id);}
+    localStorage.setItem('dt_finds_v3',JSON.stringify(finds));
+    renderFinds();
+  }));
+  list.querySelectorAll('.fi-loc').forEach(btn=>btn.addEventListener('click',e=>{
+    const f=finds.find(f=>f.id===e.target.dataset.id);
+    if(f) map.setView([f.lat,f.lng],18);
+  }));
+  list.querySelectorAll('.fi-thumb').forEach(img=>img.addEventListener('click',e=>{
+    const f=finds.find(f=>f.id===e.target.dataset.id);
+    if(f&&f.photo){document.getElementById('modalImg').src=f.photo;document.getElementById('photoModal').classList.add('show');}
+  }));
+}
+
+function getFindData() {
+  const name = document.getElementById('findName').value.trim();
+  if (!name) { showToast('Podaj nazwę znaleziska!'); return null; }
+  const ll = userMarker.getLatLng();
+  return { id:Date.now().toString(), name, cat:document.getElementById('findCat').value, depth:document.getElementById('findDepth').value||'', note:document.getElementById('findNote').value.trim(), photo:currentPhoto||null, lat:ll.lat, lng:ll.lng, ts:Date.now() };
+}
+
+function resetFindForm() {
+  document.getElementById('findName').value='';
+  document.getElementById('findDepth').value='';
+  document.getElementById('findNote').value='';
+  document.getElementById('photoPreview').style.display='none';
+  document.getElementById('photoInput').value='';
+  currentPhoto=null;
+  document.querySelector('.photo-btn').innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Zrób zdjęcie znaleziska`;
+}
+
+document.getElementById('btnSaveFind').addEventListener('click', () => {
+  const f = getFindData(); if (!f) return;
+  finds.push(f);
+  localStorage.setItem('dt_finds_v3',JSON.stringify(finds));
+  saveFindToMap(f); renderFinds(); resetFindForm();
+  showToast(`Zapisano: ${f.name}`);
+});
+
+document.getElementById('btnShareFind').addEventListener('click', async () => {
+  const f = getFindData(); if (!f) return;
+  const nick = document.getElementById('nicknameInput').value.trim() || 'Anonim';
+  try {
+    const res = await fetch(`${API_BASE}/community`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({...f, nickname:nick, region:'Polska'})
+    });
+    if (res.ok) {
+      finds.push(f);
+      localStorage.setItem('dt_finds_v3',JSON.stringify(finds));
+      saveFindToMap(f); renderFinds(); resetFindForm();
+      showToast('Udostępniono społeczności!');
+      loadCommunity();
+    } else { showToast('Błąd udostępniania'); }
+  } catch(e) { showToast('Brak połączenia z serwerem'); }
+});
+
+document.getElementById('btnAddFind').addEventListener('click', () => { switchTab('finds'); document.getElementById('findName').focus(); });
+document.getElementById('modalClose').addEventListener('click', ()=>document.getElementById('photoModal').classList.remove('show'));
+document.getElementById('photoModal').addEventListener('click', e=>{ if(e.target===document.getElementById('photoModal')) document.getElementById('photoModal').classList.remove('show'); });
+
+finds.forEach(f=>saveFindToMap(f)); renderFinds();
+
+// ─── COMMUNITY ────────────────────────────────────────────────────────────────
+async function loadCommunity() {
+  const list = document.getElementById('communityList');
+  try {
+    const res = await fetch(`${API_BASE}/community`);
+    const data = await res.json();
+    communityMarkers.forEach(m=>map.removeLayer(m)); communityMarkers=[];
+    list.innerHTML='';
+    document.getElementById('communityCount').textContent=data.length||0;
+    if (!data.length) { list.innerHTML='<div style="font-size:10px;color:var(--muted);padding:8px 0">Brak znalezisk społeczności</div>'; return; }
+    data.forEach(f=>{
+      const m = L.marker([f.lat,f.lng],{icon:communityIcon}).addTo(map)
+        .bindPopup(`<b style="color:#8b4bc8">${f.name}</b><br><small>${f.category} · ${f.nickname}</small>${f.depth_cm?'<br>↓'+f.depth_cm+'cm':''}${f.note?'<br>'+f.note:''}`);
+      communityMarkers.push(m);
+      const div=document.createElement('div'); div.className='community-item';
+      div.innerHTML=`<div class="ci-header"><div class="ci-name">${f.name}</div><span class="ci-nick">${f.nickname}</span><span class="ci-loc" data-lat="${f.lat}" data-lng="${f.lng}">📍</span></div>
+        <div class="ci-meta">${f.category}${f.depth_cm?' · ↓'+f.depth_cm+'cm':''} · ${new Date(f.created_at).toLocaleDateString('pl')}${f.region?' · '+f.region:''}</div>`;
+      list.appendChild(div);
+    });
+    list.querySelectorAll('.ci-loc').forEach(btn=>btn.addEventListener('click',e=>{ map.setView([+e.target.dataset.lat,+e.target.dataset.lng],16); }));
+  } catch(e) { list.innerHTML='<div style="font-size:10px;color:var(--muted)">Brak połączenia z serwerem</div>'; }
+}
+
+document.getElementById('btnRefreshCommunity').addEventListener('click', loadCommunity);
+
+// ─── PDF ──────────────────────────────────────────────────────────────────────
+document.getElementById('btnPDF').addEventListener('click', () => {
+  const name=document.getElementById('rName').value.trim()||'—';
+  const permit=document.getElementById('rPermit').value.trim()||'—';
+  const parcel=document.getElementById('rParcel').value.trim()||'—';
+  const area=document.getElementById('rArea').value.trim()||'—';
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210, M=15; let y=M;
+
+  doc.setFillColor(200,168,75); doc.rect(0,0,W,20,'F');
+  doc.setTextColor(13,15,14); doc.setFontSize(14); doc.setFont('helvetica','bold');
+  doc.text('SPRAWOZDANIE Z BADAN POWIERZCHNIOWYCH',W/2,13,{align:'center'});
+
+  y=28; doc.setFontSize(8); doc.setTextColor(100,100,100); doc.setFont('helvetica','normal');
+  doc.text('Wygenerowano przez aplikacje DetektorTrack | detektortrack.netlify.app',W/2,y,{align:'center'});
+  y+=8;
+
+  doc.setFillColor(245,245,240); doc.roundedRect(M,y,W-2*M,38,2,2,'F');
+  doc.setDrawColor(200,168,75); doc.setLineWidth(0.5); doc.roundedRect(M,y,W-2*M,38,2,2,'S');
+  const c1=M+5, c2=W/2+5;
+  doc.setFontSize(7); doc.setTextColor(100,100,100); doc.setFont('helvetica','bold');
+  doc.text('POSZUKIWACZ',c1,y+7); doc.text('NR POZWOLENIA WKZ',c2,y+7);
+  doc.setFont('helvetica','normal'); doc.setTextColor(13,15,14); doc.setFontSize(10);
+  doc.text(name,c1,y+14); doc.text(permit,c2,y+14);
+  doc.setFontSize(7); doc.setTextColor(100,100,100); doc.setFont('helvetica','bold');
+  doc.text('DZIALKA / OBREB',c1,y+22); doc.text('MIEJSCOWOSC / GMINA',c2,y+22);
+  doc.setFont('helvetica','normal'); doc.setTextColor(13,15,14); doc.setFontSize(10);
+  doc.text(parcel,c1,y+29); doc.text(area,c2,y+29);
+  y+=46;
+
+  doc.setFillColor(28,34,32); doc.rect(M,y,W-2*M,14,'F');
+  doc.setTextColor(200,168,75); doc.setFontSize(8); doc.setFont('helvetica','bold');
+  const elapsed=sessionStart?Math.floor((Date.now()-sessionStart)/1000):0;
+  const tStr=`${String(Math.floor(elapsed/60)).padStart(2,'0')}:${String(elapsed%60).padStart(2,'0')}`;
+  const sDate=sessionStart?new Date(sessionStart).toLocaleDateString('pl'):new Date().toLocaleDateString('pl');
+  doc.text(`DATA: ${sDate}`,M+4,y+6); doc.text(`CZAS: ${tStr}`,M+55,y+6);
+  doc.text(`DYSTANS: ${Math.round(totalDistance)}m`,M+100,y+6); doc.text(`ZNALEZISKA: ${finds.length}`,M+150,y+6);
+  y+=20;
+
+  if (finds.length>0) {
+    doc.setTextColor(13,15,14); doc.setFontSize(11); doc.setFont('helvetica','bold');
+    doc.text('WYKAZ ZNALEZISK',M,y); y+=6;
+    doc.setFillColor(200,168,75); doc.rect(M,y,W-2*M,7,'F');
+    doc.setTextColor(13,15,14); doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text('LP',M+2,y+5); doc.text('NAZWA',M+10,y+5); doc.text('KATEGORIA',M+58,y+5);
+    doc.text('GLEBOKOS',M+93,y+5); doc.text('LAT',M+113,y+5); doc.text('LNG',M+140,y+5); doc.text('CZAS',M+163,y+5);
+    y+=7;
+    finds.forEach((f,i)=>{
+      if(y>250){doc.addPage();y=M;}
+      doc.setFillColor(i%2===0?252:245,i%2===0?252:245,i%2===0?248:240);
+      doc.rect(M,y,W-2*M,8,'F');
+      doc.setTextColor(13,15,14); doc.setFontSize(7); doc.setFont('helvetica','normal');
+      doc.text(String(i+1),M+2,y+5.5); doc.text(f.name.substring(0,22),M+10,y+5.5);
+      doc.text(f.cat,M+58,y+5.5); doc.text(f.depth?f.depth+'cm':'—',M+93,y+5.5);
+      doc.text(f.lat.toFixed(5),M+113,y+5.5); doc.text(f.lng.toFixed(5),M+140,y+5.5);
+      doc.text(new Date(f.ts).toLocaleTimeString('pl'),M+163,y+5.5);
+      y+=8;
+      if(f.photo){try{if(y>240){doc.addPage();y=M;}doc.addImage(f.photo,'JPEG',M+10,y+1,22,16);if(f.note){doc.setTextColor(80,80,80);doc.setFontSize(7);doc.text(`Notatka: ${f.note}`,M+36,y+8);}y+=19;}catch(e){}}
+      else if(f.note){doc.setTextColor(80,80,80);doc.setFontSize(7);doc.setFont('helvetica','italic');doc.text(`  Notatka: ${f.note}`,M+10,y+4);y+=6;}
+    });
+  } else {
+    doc.setTextColor(120,120,120); doc.setFontSize(10);
+    doc.text('Brak zarejestrowanych znalezisk.',M,y+6); y+=14;
+  }
+
+  y+=10;
+  if(y>240){doc.addPage();y=M;}
+  doc.setDrawColor(180,180,180); doc.setLineWidth(0.3);
+  doc.line(M,y,M+60,y); doc.line(W-M-60,y,W-M,y);
+  doc.setTextColor(120,120,120); doc.setFontSize(7);
+  doc.text('Podpis poszukiwacza',M,y+4); doc.text('Pieczec i podpis WKZ',W-M-60,y+4);
+  doc.setFillColor(28,34,32); doc.rect(0,285,W,12,'F');
+  doc.setTextColor(100,140,120); doc.setFontSize(7);
+  doc.text(`Wygenerowano: ${new Date().toLocaleString('pl')} | DetektorTrack`,W/2,291,{align:'center'});
+  doc.setTextColor(200,168,75);
+  doc.text('Sprawozdanie nalezy zlozyc do WKZ w ciagu 3 miesiecy od zakonczenia badan',W/2,296,{align:'center'});
+  doc.save(`sprawozdanie_WKZ_${new Date().toLocaleDateString('pl').replace(/\./g,'-')}.pdf`);
+  showToast('PDF wygenerowany!');
+});
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.toggle('active',c.id===`tab-${name}`));
+  if (name==='community') loadCommunity();
+}
+document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>switchTab(tab.dataset.tab)));
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+// ─── PWA HINT ─────────────────────────────────────────────────────────────────
+if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone && !localStorage.getItem('pwa_hint')) {
+  setTimeout(()=>{
+    const h=document.createElement('div');
+    h.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1c2220;border:1px solid #c8a84b;border-radius:8px;padding:12px 16px;z-index:9999;max-width:280px;width:90%;font-family:"IBM Plex Mono",monospace;font-size:11px;color:#e8ede0;box-shadow:0 4px 20px rgba(0,0,0,0.6);text-align:center;line-height:1.6';
+    h.innerHTML=`<div style="color:#c8a84b;font-weight:600;margin-bottom:6px">📲 DODAJ DO EKRANU GŁÓWNEGO</div>Safari → ikona □↑ → "Dodaj do ekranu głównego"<br><button onclick="this.parentElement.remove();localStorage.setItem('pwa_hint','1')" style="margin-top:8px;background:#c8a84b;border:none;color:#0d0f0e;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:5px 12px;border-radius:3px;cursor:pointer">OK</button>`;
+    document.body.appendChild(h);
+    localStorage.setItem('pwa_hint','1');
+  },2000);
+}
+</script>
+</body>
+</html>
