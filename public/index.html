@@ -432,39 +432,58 @@ document.getElementById('parcelId').addEventListener('keydown', e => { if (e.key
 
 async function searchParcel() {
   const id = document.getElementById('parcelId').value.trim();
-  if (!id) { showToast('Podaj TERYT działki'); return; }
+  if (!id) { showToast('Podaj identyfikator działki'); return; }
   const btn = document.getElementById('btnSearchParcel');
   btn.innerHTML = 'SZUKAJ<span class="loading"></span>';
   btn.disabled = true;
   try {
     const res = await fetch(`${API_BASE}/geoportal?id=${encodeURIComponent(id)}`);
     const text = await res.text();
-    const lines = text.trim().split('\n');
-    if (lines[0] === '0' && lines.length > 1) {
-      // Parse WKT geometry from ULDK response
-      const data = lines[1].split(';');
-      const wkt = data[0];
-      const teryt = data[1] || id;
-      const voiv = data[2] || '';
-      const county = data[3] || '';
-      const commune = data[4] || '';
-      const parcelNum = data[6] || id;
+    console.log('Odpowiedź ULDK:', text.substring(0, 300));
 
-      // Convert WKT Polygon to GeoJSON
-      const geojson = wktPolygonToGeoJSON(wkt);
-      if (geojson) {
-        currentParcelGeoJSON = geojson;
-        document.getElementById('prName').textContent = `Działka: ${parcelNum}`;
-        document.getElementById('prInfo').textContent = `${commune}, ${county}, ${voiv}`;
+    const lines = text.trim().split('\n');
+    const firstLine = lines[0].trim();
+
+    // ULDK zwraca "0" jako pierwsza linia gdy znajdzie działkę
+    // lub "-1" gdy nie znajdzie
+    if (firstLine === '-1' || lines.length < 2) {
+      showToast('Nie znaleziono działki – sprawdź identyfikator');
+      btn.innerHTML = 'SZUKAJ'; btn.disabled = false;
+      return;
+    }
+
+    // Dane są w drugiej linii oddzielone średnikiem
+    const dataLine = lines[1] || lines[0];
+    const parts = dataLine.split(';');
+    const wkt = parts[0];
+    const voiv = parts[2] || '';
+    const county = parts[3] || '';
+    const commune = parts[4] || '';
+    const parcelNum = parts[6] || id;
+
+    const geojson = wktPolygonToGeoJSON(wkt);
+    if (geojson) {
+      currentParcelGeoJSON = geojson;
+      document.getElementById('prName').textContent = `Działka: ${parcelNum}`;
+      document.getElementById('prInfo').textContent = `${commune}${county ? ', ' + county : ''}${voiv ? ', ' + voiv : ''}`;
+      document.getElementById('parcelResult').style.display = 'block';
+      showToast('Działka znaleziona!');
+    } else {
+      // Spróbuj MULTIPOLYGON
+      const geojson2 = wktToGeoJSONMulti(wkt);
+      if (geojson2) {
+        currentParcelGeoJSON = geojson2;
+        document.getElementById('prName').textContent = `Działka: ${parcelNum || id}`;
+        document.getElementById('prInfo').textContent = `${commune}${county ? ', ' + county : ''}`;
         document.getElementById('parcelResult').style.display = 'block';
         showToast('Działka znaleziona!');
       } else {
-        showToast('Nie można przetworzyć geometrii');
+        showToast('Błąd parsowania geometrii działki');
+        console.error('WKT:', wkt);
       }
-    } else {
-      showToast('Nie znaleziono działki – sprawdź TERYT');
     }
   } catch(e) {
+    console.error(e);
     showToast('Błąd połączenia z Geoportalem');
   }
   btn.innerHTML = 'SZUKAJ'; btn.disabled = false;
@@ -472,13 +491,38 @@ async function searchParcel() {
 
 function wktPolygonToGeoJSON(wkt) {
   try {
-    const match = wkt.match(/POLYGON\s*\(\((.+)\)\)/i) || wkt.match(/MULTIPOLYGON\s*\(\(\((.+)\)\)\)/i);
+    const match = wkt.match(/POLYGON\s*\(\((.+)\)\)/i);
     if (!match) return null;
     const coords = match[1].split(',').map(pair => {
       const [x, y] = pair.trim().split(/\s+/);
       return [parseFloat(x), parseFloat(y)];
     });
+    if (coords.some(c => isNaN(c[0]) || isNaN(c[1]))) return null;
     return { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{} };
+  } catch(e) { return null; }
+}
+
+function wktToGeoJSONMulti(wkt) {
+  try {
+    // MULTIPOLYGON
+    const multi = wkt.match(/MULTIPOLYGON\s*\(\(\((.+)\)\)\)/i);
+    if (multi) {
+      const coords = multi[1].split(',').map(pair => {
+        const [x, y] = pair.trim().split(/\s+/);
+        return [parseFloat(x), parseFloat(y)];
+      });
+      return { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{} };
+    }
+    // Spróbuj wyciągnąć dowolne współrzędne
+    const anyCoords = wkt.match(/[\d.]+\s+[\d.]+/g);
+    if (anyCoords && anyCoords.length > 2) {
+      const coords = anyCoords.map(pair => {
+        const [x, y] = pair.trim().split(/\s+/);
+        return [parseFloat(x), parseFloat(y)];
+      });
+      return { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{} };
+    }
+    return null;
   } catch(e) { return null; }
 }
 
