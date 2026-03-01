@@ -1088,40 +1088,37 @@ document.getElementById('pickBannerClose').addEventListener('click', cancelPickM
 
 map.on('click', async function(e) {
   if (!pickModeActive) return;
+  e.originalEvent.preventDefault();
+  e.originalEvent.stopPropagation();
 
   const lat = e.latlng.lat;
   const lng = e.latlng.lng;
   showToast('⏳ Szukam działki…');
 
-  // Próba 1: przez proxy Netlify (bez CORS)
+  // Osobne parametry lat= i lng= zamiast xy= – unikamy problemu z przecinkami w URL
   let text = null;
   try {
-    const r = await fetch(`${API_BASE}/geoportal?request=GetParcelByXY&xy=${lng},${lat},4326`, {signal: AbortSignal.timeout(8000)});
+    const r = await fetch(`${API_BASE}/geoportal?lat=${lat}&lng=${lng}`, {signal: AbortSignal.timeout(10000)});
     const t = await r.text();
-    if (t.trim().split('\n').length >= 2 && !t.trim().startsWith('-1')) text = t;
-    console.log('[PICK proxy]', t.substring(0,200));
+    console.log('[PICK proxy] odpowiedź:', t.substring(0, 300));
+    const lines = t.trim().split('\n');
+    if (lines.length >= 2 && lines[0].trim() !== '-1') text = t;
+    else console.warn('[PICK proxy] ULDK zwrócił -1 lub za mało linii:', t.substring(0,100));
   } catch(e1) { console.warn('[PICK proxy] błąd:', e1.message); }
-
-  // Próba 2: bezpośrednio do ULDK (działa gdy serwer pozwala CORS)
-  if (!text) {
-    try {
-      const r2 = await fetch(`https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${lng},${lat},4326&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship`, {signal: AbortSignal.timeout(8000)});
-      const t2 = await r2.text();
-      if (t2.trim().split('\n').length >= 2 && !t2.trim().startsWith('-1')) text = t2;
-      console.log('[PICK direct]', t2.substring(0,200));
-    } catch(e2) { console.warn('[PICK direct] błąd:', e2.message); }
-  }
 
   if (!text) { showToast('Brak działki w tym miejscu'); return; }
 
   const lines = text.trim().split('\n');
-  const parts  = lines[1].split('|');
+  const parts = lines[1].split('|');
   const wkt    = (parts[0] || '').trim();
   const parcel = (parts[2] || parts[1] || '?').trim();
-  const info   = [parts[4], parts[5], parts[6]].filter(Boolean).map(s=>s.trim()).join(', ');
+  const info   = [parts[4], parts[5], parts[6]].filter(Boolean).map(s => s.trim()).join(', ');
+
+  console.log('[PICK] wkt preview:', wkt.substring(0, 100));
+  console.log('[PICK] działka:', parcel, '| info:', info);
 
   const geojson = wktPolygonToGeoJSON(wkt) || wktToGeoJSONMulti(wkt);
-  if (!geojson) { showToast('Błąd geometrii działki'); console.error('[PICK] wkt:', wkt); return; }
+  if (!geojson) { showToast('Błąd parsowania geometrii'); console.error('[PICK] wkt pełny:', wkt); return; }
 
   currentParcelGeoJSON = geojson;
   if (currentParcelLayer) map.removeLayer(currentParcelLayer);
