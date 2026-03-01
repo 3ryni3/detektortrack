@@ -443,19 +443,19 @@ async function searchParcel() {
 
     const lines = text.trim().split('\n');
     const firstLine = lines[0].trim();
+    console.log('Linie odpowiedzi:', lines.length, '| Pierwsza linia:', firstLine.substring(0,50));
 
-    // ULDK zwraca "0" jako pierwsza linia gdy znajdzie działkę
-    // lub "-1" gdy nie znajdzie
     if (firstLine === '-1' || lines.length < 2) {
       showToast('Nie znaleziono działki – sprawdź identyfikator');
       btn.innerHTML = 'SZUKAJ'; btn.disabled = false;
       return;
     }
 
-    // Dane są w drugiej linii oddzielone średnikiem
     const dataLine = lines[1] || lines[0];
     const parts = dataLine.split(';');
     const wkt = parts[0];
+    console.log('WKT (pierwsze 100 znaków):', wkt.substring(0,100));
+    console.log('Liczba części:', parts.length);
     const voiv = parts[2] || '';
     const county = parts[3] || '';
     const commune = parts[4] || '';
