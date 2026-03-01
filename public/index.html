@@ -451,15 +451,18 @@ async function searchParcel() {
       return;
     }
 
+    // Odpowiedź ULDK: "0\nSRID=4326;POLYGON(...);teryt;voiv;county;commune;region;parcel"
     const dataLine = lines[1] || lines[0];
-    const parts = dataLine.split(';');
-    const wkt = parts[0];
-    console.log('WKT (pierwsze 100 znaków):', wkt.substring(0,100));
-    console.log('Liczba części:', parts.length);
-    const voiv = parts[2] || '';
-    const county = parts[3] || '';
-    const commune = parts[4] || '';
-    const parcelNum = parts[6] || id;
+    // Wyciągnij WKT – kończy się na ostatnim ))
+    const wktEndIdx = dataLine.lastIndexOf('))') + 2;
+    const wkt = dataLine.substring(0, wktEndIdx);
+    const rest = dataLine.substring(wktEndIdx + 1); // po średniku za ))
+    const metaParts = rest.split(';');
+    const voiv = metaParts[1] || '';
+    const county = metaParts[2] || '';
+    const commune = metaParts[3] || '';
+    const parcelNum = metaParts[5] || id;
+    console.log('WKT:', wkt.substring(0,80), '| Działka:', parcelNum);
 
     const geojson = wktPolygonToGeoJSON(wkt);
     if (geojson) {
@@ -491,7 +494,9 @@ async function searchParcel() {
 
 function wktPolygonToGeoJSON(wkt) {
   try {
-    const match = wkt.match(/POLYGON\s*\(\((.+)\)\)/i);
+    // Usuń prefix SRID=4326; jeśli istnieje
+    const cleanWkt = wkt.replace(/^SRID=\d+;/i, '').trim();
+    const match = cleanWkt.match(/POLYGON\s*\(\((.+)\)\)/i);
     if (!match) return null;
     const coords = match[1].split(',').map(pair => {
       const [x, y] = pair.trim().split(/\s+/);
@@ -504,8 +509,8 @@ function wktPolygonToGeoJSON(wkt) {
 
 function wktToGeoJSONMulti(wkt) {
   try {
-    // MULTIPOLYGON
-    const multi = wkt.match(/MULTIPOLYGON\s*\(\(\((.+)\)\)\)/i);
+    const cleanWkt = wkt.replace(/^SRID=\d+;/i, '').trim();
+    const multi = cleanWkt.match(/MULTIPOLYGON\s*\(\(\((.+)\)\)\)/i);
     if (multi) {
       const coords = multi[1].split(',').map(pair => {
         const [x, y] = pair.trim().split(/\s+/);
@@ -513,8 +518,7 @@ function wktToGeoJSONMulti(wkt) {
       });
       return { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{} };
     }
-    // Spróbuj wyciągnąć dowolne współrzędne
-    const anyCoords = wkt.match(/[\d.]+\s+[\d.]+/g);
+    const anyCoords = cleanWkt.match(/[\d.]+\s+[\d.]+/g);
     if (anyCoords && anyCoords.length > 2) {
       const coords = anyCoords.map(pair => {
         const [x, y] = pair.trim().split(/\s+/);
