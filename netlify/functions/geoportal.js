@@ -1,17 +1,18 @@
 // netlify/functions/geoportal.js
 exports.handler = async (event) => {
-  const params = event.queryStringParameters || {};
-  const { id, xy } = params;
+  const p = event.queryStringParameters || {};
 
   let url;
 
-  if (xy) {
-    // xy = "lng,lat,4326" – NIE uzywamy encodeURIComponent bo przecinki musza zostac
-    url = `https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${xy}&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship`;
-  } else if (id) {
-    url = `https://uldk.gugik.gov.pl/?request=GetParcelById&id=${encodeURIComponent(id)}&result=geom_wkt`;
+  if (p.lat && p.lng) {
+    // GetParcelByXY – klikniecie dzialki na mapie
+    // Osobne parametry lat/lng zeby uniknac problemu z przecinkami w URL
+    url = `https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${p.lng},${p.lat},4326&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship`;
+  } else if (p.id) {
+    // GetParcelById – wyszukiwanie po TERYT
+    url = `https://uldk.gugik.gov.pl/?request=GetParcelById&id=${encodeURIComponent(p.id)}&result=geom_wkt`;
   } else {
-    return { statusCode: 400, body: 'Brakuje parametru id lub xy' };
+    return { statusCode: 400, body: 'Brakuje parametru: id lub lat+lng' };
   }
 
   try {
