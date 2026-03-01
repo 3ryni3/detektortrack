@@ -139,8 +139,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 .legend-dot{width:8px;height:8px;border-radius:50%}
 
 .leaflet-tile{filter:brightness(0.85) saturate(0.8)}
-#map.pick-mode{cursor:crosshair !important}
-#map.pick-mode .leaflet-interactive{cursor:crosshair !important}
+#map.pick-mode, #map.pick-mode .leaflet-grab { cursor: crosshair !important; }
 .leaflet-control-attribution{display:none}
 .leaflet-control-zoom a{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
 select option{background:var(--card)}
@@ -190,8 +189,8 @@ select option{background:var(--card)}
 </div>
 <div class="boundary-alert" id="boundaryAlert"></div>
 <div class="boundary-banner" id="boundaryBanner">⚠ POZA GRANICĄ DZIAŁKI!</div>
-<div id="pickBanner" style="display:none;position:fixed;top:58px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0d0f0e;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;padding:8px 20px;border-radius:4px;z-index:9991;letter-spacing:1px;box-shadow:0 2px 12px rgba(200,168,75,0.5);white-space:nowrap">
-  👆 KLIKNIJ DZIAŁKĘ NA MAPIE &nbsp;<span onclick="cancelPickMode()" style="cursor:pointer;opacity:0.7">✕</span>
+<div id="pickBanner" style="display:none;position:fixed;top:58px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0d0f0e;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;padding:8px 20px;border-radius:4px;z-index:9991;letter-spacing:1px;box-shadow:0 2px 12px rgba(200,168,75,0.5);white-space:nowrap;cursor:default">
+  👆 KLIKNIJ DZIAŁKĘ NA MAPIE &nbsp;<span id="pickBannerClose" style="cursor:pointer;opacity:0.7">✕</span>
 </div>
 
 <div class="bottom-panel">
@@ -248,13 +247,11 @@ select option{background:var(--card)}
   <!-- DZIAŁKA SEARCH -->
   <div class="tab-content" id="tab-parcel">
     <div class="section-title">Szukaj działki z Geoportalu</div>
-    <div style="margin-bottom:8px">
-      <button class="btn success" id="btnPickParcelTab" style="width:100%;justify-content:center;font-size:12px;padding:10px">
-        👆 KLIKNIJ DZIAŁKĘ NA MAPIE
-      </button>
-      <div style="font-size:9px;color:var(--muted);margin-top:4px;line-height:1.5">Włącz warstwę działek (⊞) aby widzieć granice, a następnie kliknij dowolną działkę.</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;margin:8px 0"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:9px;color:var(--muted)">LUB WPISZ TERYT</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
+    <button class="btn success" id="btnPickParcelTab" style="width:100%;justify-content:center;margin-bottom:8px;padding:10px;font-size:12px">
+      👆 KLIKNIJ DZIAŁKĘ NA MAPIE
+    </button>
+    <div style="font-size:9px;color:var(--muted);line-height:1.5;margin-bottom:8px">Włącz warstwę działek (⊞) aby widzieć granice, następnie kliknij dowolną działkę.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:9px;color:var(--muted)">LUB WPISZ TERYT</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
     <div class="search-hint">
       Podaj TERYT działki w formacie: <span style="color:var(--accent)">WWPPGGRROO.NUMER</span><br>
       np. <span style="color:var(--accent2)">3209011.0003.18/1</span> (woj.32, pow.09, gm.011, obr.0003, nr 18/1)
@@ -916,7 +913,7 @@ map.on('zoomend', () => {
 
 document.getElementById('btnWmsToggle').addEventListener('click', toggleWms);
 
-// ─── PICK PARCEL BY CLICK ─────────────────────────────────────────────────────
+// ─── PICK PARCEL BY MAP CLICK ─────────────────────────────────────────────────
 let pickModeActive = false;
 
 function enterPickMode() {
@@ -926,9 +923,8 @@ function enterPickMode() {
   document.getElementById('btnPickParcel').classList.add('active-state');
   document.getElementById('btnPickParcelTab').textContent = '✕ ANULUJ WYBÓR';
   document.getElementById('btnPickParcelTab').className = 'btn danger';
-  document.getElementById('btnPickParcelTab').style.cssText = 'width:100%;justify-content:center;font-size:12px;padding:10px';
-  // Włącz WMS jeśli nie jest aktywny
-  if (!wmsActive) toggleWms();
+  document.getElementById('btnPickParcelTab').style.cssText = 'width:100%;justify-content:center;margin-bottom:8px;padding:10px;font-size:12px';
+  if (!wmsActive) toggleWms(); // włącz działki jeśli niewidoczne
   showToast('Kliknij działkę na mapie');
 }
 
@@ -939,63 +935,66 @@ function cancelPickMode() {
   document.getElementById('btnPickParcel').classList.remove('active-state');
   document.getElementById('btnPickParcelTab').innerHTML = '👆 KLIKNIJ DZIAŁKĘ NA MAPIE';
   document.getElementById('btnPickParcelTab').className = 'btn success';
-  document.getElementById('btnPickParcelTab').style.cssText = 'width:100%;justify-content:center;font-size:12px;padding:10px';
+  document.getElementById('btnPickParcelTab').style.cssText = 'width:100%;justify-content:center;margin-bottom:8px;padding:10px;font-size:12px';
 }
 
 document.getElementById('btnPickParcel').addEventListener('click', () => {
-  if (pickModeActive) cancelPickMode(); else enterPickMode();
+  pickModeActive ? cancelPickMode() : enterPickMode();
 });
 
 document.getElementById('btnPickParcelTab').addEventListener('click', () => {
-  if (pickModeActive) { cancelPickMode(); return; }
-  enterPickMode();
-  switchTab('parcel'); // zostań na zakładce – mapa jest widoczna pod panelem
+  pickModeActive ? cancelPickMode() : enterPickMode();
 });
 
-// Klik na mapę w trybie pick
+document.getElementById('pickBannerClose').addEventListener('click', cancelPickMode);
+
+// Klik na mapę – pobierz działkę z ULDK
 map.on('click', async function(e) {
   if (!pickModeActive) return;
 
-  const { lat, lng } = e.latlng;
+  const lat = e.latlng.lat;
+  const lng = e.latlng.lng;
+
   showToast('Szukam działki…');
 
   try {
-    // ULDK API – GetParcelByXY (EPSG:4326)
-    const url = `https://uldk.gugik.gov.pl/?request=GetParcelByXY&y=${lat}&x=${lng}&result=teryt,geom_wkt,voivodeship,county,commune,region,parcel&srid=4326`;
+    // ULDK API – dla SRID=4326: x=długość (lng), y=szerokość (lat)
+    // Zwraca: geom_wkt|teryt|parcel|region|commune|county|voivodeship
+    const url = `https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${lng},${lat},4326&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship`;
     const res = await fetch(url);
     const text = await res.text();
-    console.log('ULDK click response:', text.substring(0, 400));
+    console.log('[ULDK click] raw:', text.substring(0, 500));
 
     const lines = text.trim().split('\n');
-    if (lines[0].trim() === '-1' || lines.length < 2) {
+    const status = lines[0].trim();
+
+    if (status === '-1' || !lines[1]) {
       showToast('Brak działki w tym miejscu');
       return;
     }
 
-    const dataLine = lines[1] || lines[0];
-    // Format: teryt;SRID=4326;POLYGON(...);voiv;county;commune;region;parcel
-    // Wyciągnij WKT
-    const sridIdx = dataLine.indexOf('SRID=');
-    const wktStart = sridIdx >= 0 ? sridIdx : dataLine.indexOf('POLYGON');
-    const wktEndIdx = dataLine.lastIndexOf('))') + 2;
-    const wkt = dataLine.substring(wktStart, wktEndIdx);
-    const rest = dataLine.substring(wktEndIdx + 1);
-    const metaParts = rest.split(';');
+    // Pola oddzielone | : geom_wkt|teryt|parcel|region|commune|county|voivodeship
+    const parts = lines[1].split('|');
+    const wkt      = parts[0] || '';
+    // const teryt = parts[1] || '';
+    const parcel   = parts[2] || parts[1] || '?';
+    // const region = parts[3] || '';
+    const commune  = parts[4] || '';
+    const county   = parts[5] || '';
+    const voiv     = parts[6] || '';
 
-    // Jeśli teryt jest na początku przed SRID, weź go
-    const firstPart = dataLine.substring(0, wktStart - 1);
-    const teryt = firstPart || (metaParts[0] || '');
-    const voiv = metaParts[1] || metaParts[0] || '';
-    const county = metaParts[2] || metaParts[1] || '';
-    const commune = metaParts[3] || metaParts[2] || '';
-    const parcelNum = metaParts[5] || metaParts[4] || teryt || '?';
+    console.log('[ULDK click] wkt:', wkt.substring(0,80), '| parcel:', parcel);
 
     const geojson = wktPolygonToGeoJSON(wkt) || wktToGeoJSONMulti(wkt);
-    if (!geojson) { showToast('Nie udało się wczytać geometrii działki'); return; }
+    if (!geojson) {
+      showToast('Nie udało się wczytać geometrii działki');
+      console.error('[ULDK click] WKT parse failed:', wkt);
+      return;
+    }
 
     currentParcelGeoJSON = geojson;
 
-    // Dodaj na mapę
+    // Dodaj warstwę na mapę
     if (currentParcelLayer) map.removeLayer(currentParcelLayer);
     currentParcelLayer = L.geoJSON(geojson, {
       style: { color:'#c8a84b', weight:2, fillOpacity:0.12, dashArray:'6 4' }
@@ -1003,17 +1002,17 @@ map.on('click', async function(e) {
     zoneLayers.push(currentParcelLayer);
     map.fitBounds(currentParcelLayer.getBounds(), { padding:[20,20] });
 
-    // Pokaż wynik w zakładce działka
-    document.getElementById('prName').textContent = `Działka: ${parcelNum}`;
-    document.getElementById('prInfo').textContent = `${commune}${county ? ', ' + county : ''}${voiv ? ', ' + voiv : ''}`;
+    // Pokaż wynik w zakładce DZIAŁKA
+    document.getElementById('prName').textContent = `Działka: ${parcel}`;
+    document.getElementById('prInfo').textContent = [commune, county, voiv].filter(Boolean).join(', ');
     document.getElementById('parcelResult').style.display = 'block';
 
-    showToast(`✓ Dodano działkę ${parcelNum}`);
+    showToast(`✓ Dodano działkę ${parcel}`);
     cancelPickMode();
     switchTab('parcel');
 
   } catch(err) {
-    console.error(err);
+    console.error('[ULDK click] error:', err);
     showToast('Błąd połączenia z Geoportalem');
   }
 });
