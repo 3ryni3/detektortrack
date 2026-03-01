@@ -1137,6 +1137,7 @@ map.on('click', async function(e) {
   cancelPickMode();
   switchTab('parcel');
 });
+
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone && !localStorage.getItem('pwa_hint')) {
   setTimeout(()=>{
     const h=document.createElement('div');
