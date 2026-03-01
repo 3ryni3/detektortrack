@@ -145,6 +145,25 @@ select option{background:var(--card)}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* BOUNDARY ALERT */
+.boundary-alert{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9990;pointer-events:none;border:4px solid transparent;transition:border-color 0.3s}
+.boundary-alert.outside{border-color:var(--danger);animation:alertPulse 1s infinite}
+@keyframes alertPulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.boundary-banner{position:fixed;top:58px;left:50%;transform:translateX(-50%);background:var(--danger);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;padding:8px 20px;border-radius:4px;z-index:9991;display:none;letter-spacing:1px;box-shadow:0 2px 12px rgba(200,75,75,0.5)}
+.boundary-banner.show{display:block}
+
+/* WMS BADGE */
+.wms-badge{position:absolute;left:10px;bottom:10px;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:9px;color:var(--muted);font-family:'IBM Plex Mono',monospace;display:none}
+.wms-badge.active{display:block;color:var(--accent2);border-color:var(--accent2)}
+
+/* HISTORY */
+.history-list{display:flex;flex-direction:column;gap:6px}
+.history-item{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:4px;padding:8px 10px;font-size:11px;cursor:pointer;transition:border-color 0.15s}
+.history-item:hover{border-left-color:var(--accent2)}
+.hi-title{color:var(--text);font-weight:600;margin-bottom:3px}
+.hi-meta{color:var(--muted);font-size:9px;display:flex;gap:10px;flex-wrap:wrap}
+.hi-actions{display:flex;gap:6px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -162,8 +181,12 @@ select option{background:var(--card)}
     <div class="fab-btn" id="btnCenter" title="Wyśrodkuj">⊕</div>
     <div class="fab-btn" id="btnTrackToggle" title="Nagrywaj ślad">⬤</div>
     <div class="fab-btn" id="btnAddFind" title="Dodaj znalezisko">✦</div>
+    <div class="fab-btn" id="btnWmsToggle" title="Warstwa działek z Geoportalu">⊞</div>
   </div>
+  <div class="wms-badge" id="wmsBadge">⊞ DZIAŁKI GEOPORTAL</div>
 </div>
+<div class="boundary-alert" id="boundaryAlert"></div>
+<div class="boundary-banner" id="boundaryBanner">⚠ POZA GRANICĄ DZIAŁKI!</div>
 
 <div class="bottom-panel">
   <div class="tabs">
@@ -186,6 +209,10 @@ select option{background:var(--card)}
     <button class="tab" data-tab="report">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       RAPORT
+    </button>
+    <button class="tab" data-tab="history">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4M3 16v-5h5"/></svg>
+      HISTORIA
     </button>
     <button class="tab" data-tab="help">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -305,6 +332,17 @@ select option{background:var(--card)}
     </div>
   </div>
 
+  <!-- HISTORIA -->
+  <div class="tab-content" id="tab-history">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="section-title" style="margin:0">Zapisane sesje (<span id="historyCount">0</span>)</div>
+      <button class="btn danger" id="btnClearHistory" style="padding:5px 10px;font-size:10px">✕ WYCZYŚĆ</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div style="font-size:10px;color:var(--muted);padding:8px 0">Brak zapisanych sesji</div>
+    </div>
+  </div>
+
   <!-- POMOC -->
   <div class="tab-content" id="tab-help">
     <div class="instr">
@@ -387,6 +425,8 @@ navigator.geolocation && navigator.geolocation.watchPosition(pos => {
     if (lastPos) { totalDistance += map.distance([lastPos.lat,lastPos.lng],[lat,lng]); document.getElementById('statDist').textContent = Math.round(totalDistance); }
     lastPos = {lat,lng};
   }
+  // Sprawdź granicę działki przy każdej aktualizacji GPS
+  checkBoundary(lat, lng);
 }, () => { document.getElementById('gpsDot').className='gps-dot error'; document.getElementById('gpsText').textContent='BŁĄD GPS'; },
 { enableHighAccuracy:true, maximumAge:3000, timeout:10000 });
 
@@ -411,6 +451,12 @@ function toggleTracking() {
     btn.className='btn primary'; btn.textContent='▶ START ŚLADU';
     fab.className='fab-btn';
     showToast(`Ślad: ${Math.round(totalDistance)}m`);
+    // Zapisz sesję do historii
+    saveSession();
+    // Ukryj alert granicy
+    document.getElementById('boundaryAlert').classList.remove('outside');
+    document.getElementById('boundaryBanner').classList.remove('show');
+    wasOutside = false;
   }
 }
 document.getElementById('btnTrack').addEventListener('click', toggleTracking);
@@ -799,6 +845,198 @@ function showToast(msg) {
   t.textContent=msg; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2500);
 }
+
+// ─── WMS WARSTWA DZIAŁEK ─────────────────────────────────────────────────────
+let wmsLayer = null;
+let wmsActive = false;
+const WMS_ZOOM_MIN = 15; // pokazuj działki od zoom 15
+
+function toggleWms() {
+  wmsActive = !wmsActive;
+  const btn = document.getElementById('btnWmsToggle');
+  const badge = document.getElementById('wmsBadge');
+  if (wmsActive) {
+    if (map.getZoom() >= WMS_ZOOM_MIN) addWmsLayer();
+    btn.style.background = 'var(--accent2)';
+    btn.style.color = '#0d0f0e';
+    badge.classList.add('active');
+    showToast('Warstwa działek włączona (zoom 15+)');
+  } else {
+    removeWmsLayer();
+    btn.style.background = '';
+    btn.style.color = '';
+    badge.classList.remove('active');
+    showToast('Warstwa działek wyłączona');
+  }
+}
+
+function addWmsLayer() {
+  if (wmsLayer) return;
+  // Geoportal WMS – ewidencja gruntów (działki z numerami)
+  wmsLayer = L.tileLayer.wms('https://integracja.gugik.gov.pl/cgi-bin/KrajowaIntegracjaEwidencjiGruntow', {
+    layers: 'dzialki,numery_dzialek',
+    format: 'image/png',
+    transparent: true,
+    version: '1.3.0',
+    opacity: 0.7,
+    maxZoom: 21,
+  }).addTo(map);
+}
+
+function removeWmsLayer() {
+  if (wmsLayer) { map.removeLayer(wmsLayer); wmsLayer = null; }
+}
+
+// Automatycznie dodaj/usuń WMS w zależności od zoom
+map.on('zoomend', () => {
+  if (!wmsActive) return;
+  if (map.getZoom() >= WMS_ZOOM_MIN) {
+    addWmsLayer();
+    document.getElementById('wmsBadge').classList.add('active');
+  } else {
+    removeWmsLayer();
+    document.getElementById('wmsBadge').classList.remove('active');
+    document.getElementById('wmsBadge').textContent = '⊞ PRZYBLIŻ ABY ZOBACZYĆ DZIAŁKI';
+    setTimeout(() => { document.getElementById('wmsBadge').textContent = '⊞ DZIAŁKI GEOPORTAL'; }, 2000);
+  }
+});
+
+document.getElementById('btnWmsToggle').addEventListener('click', toggleWms);
+
+// ─── BOUNDARY CHECK ───────────────────────────────────────────────────────────
+let boundaryCheckActive = false;
+let wasOutside = false;
+
+function pointInPolygon(lat, lng, geojson) {
+  if (!geojson) return true; // brak działki = nie sprawdzaj
+  try {
+    const coords = geojson.geometry.coordinates[0];
+    let inside = false;
+    for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+      const xi = coords[i][0], yi = coords[i][1];
+      const xj = coords[j][0], yj = coords[j][1];
+      if (((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  } catch(e) { return true; }
+}
+
+function checkBoundary(lat, lng) {
+  // Sprawdź czy jest jakakolwiek zaznaczona działka
+  const hasParcel = zoneLayers.length > 0 || currentParcelLayer;
+  if (!hasParcel) return;
+
+  // Zbierz wszystkie GeoJSON z warstw
+  let insideAny = false;
+  if (currentParcelGeoJSON) {
+    insideAny = pointInPolygon(lat, lng, currentParcelGeoJSON);
+  }
+  // Jeśli jest wiele warstw z pliku – też sprawdź
+  if (!insideAny && zoneLayers.length > 0) insideAny = false; // uproszczenie
+
+  const alert = document.getElementById('boundaryAlert');
+  const banner = document.getElementById('boundaryBanner');
+
+  if (!insideAny && !wasOutside) {
+    // Wyszedłeś poza działkę!
+    wasOutside = true;
+    alert.classList.add('outside');
+    banner.classList.add('show');
+    // Wibracja jeśli dostępna
+    if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+    showToast('⚠ Opuściłeś granicę działki!');
+  } else if (insideAny && wasOutside) {
+    // Wróciłeś na działkę
+    wasOutside = false;
+    alert.classList.remove('outside');
+    banner.classList.remove('show');
+    showToast('✓ Jesteś na działce');
+  }
+}
+
+// ─── HISTORIA SESJI ───────────────────────────────────────────────────────────
+let sessions = JSON.parse(localStorage.getItem('dt_sessions_v3') || '[]');
+
+function saveSession() {
+  if (trackPoints.length < 2) return;
+  const session = {
+    id: Date.now().toString(),
+    date: new Date().toLocaleDateString('pl'),
+    time: new Date().toLocaleTimeString('pl', {hour:'2-digit', minute:'2-digit'}),
+    distance: Math.round(totalDistance),
+    duration: sessionStart ? Math.floor((Date.now() - sessionStart) / 1000) : 0,
+    findsCount: finds.length,
+    points: trackPoints.slice(), // kopia śladu
+    finds: finds.slice(),
+  };
+  sessions.unshift(session); // najnowsze na górze
+  if (sessions.length > 20) sessions = sessions.slice(0, 20); // max 20 sesji
+  localStorage.setItem('dt_sessions_v3', JSON.stringify(sessions));
+  renderHistory();
+  showToast('Sesja zapisana w historii');
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const count = document.getElementById('historyCount');
+  sessions = JSON.parse(localStorage.getItem('dt_sessions_v3') || '[]');
+  count.textContent = sessions.length;
+  if (!sessions.length) {
+    list.innerHTML = '<div style="font-size:10px;color:var(--muted);padding:8px 0">Brak zapisanych sesji</div>';
+    return;
+  }
+  list.innerHTML = '';
+  sessions.forEach(s => {
+    const mins = Math.floor(s.duration / 60);
+    const secs = s.duration % 60;
+    const durStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML = `
+      <div class="hi-title">${s.date} o ${s.time}
+        <button class="hi-del" data-id="${s.id}" style="float:right;background:none;border:none;color:var(--muted);cursor:pointer">✕</button>
+      </div>
+      <div class="hi-meta">
+        <span>📍 ${s.distance}m</span>
+        <span>⏱ ${durStr}</span>
+        <span>✦ ${s.findsCount} znalezisk</span>
+      </div>
+      <div class="hi-actions">
+        <button class="btn" data-id="${s.id}" style="font-size:10px;padding:5px 8px" onclick="replaySession('${s.id}')">🗺 POKAŻ ŚLAD</button>
+      </div>`;
+    list.appendChild(div);
+  });
+  list.querySelectorAll('.hi-del').forEach(btn => btn.addEventListener('click', e => {
+    const id = e.target.dataset.id;
+    sessions = sessions.filter(s => s.id !== id);
+    localStorage.setItem('dt_sessions_v3', JSON.stringify(sessions));
+    renderHistory();
+  }));
+}
+
+function replaySession(id) {
+  const s = sessions.find(s => s.id === id);
+  if (!s || !s.points || s.points.length < 2) { showToast('Brak danych śladu'); return; }
+  // Pokaż ślad historyczny w innym kolorze
+  const histLine = L.polyline(s.points, { color:'#c8a84b', weight:2, opacity:0.7, dashArray:'4 4' }).addTo(map);
+  map.fitBounds(histLine.getBounds(), { padding:[20,20] });
+  showToast(`Ślad z ${s.date}`);
+  // Usuń po 10 sekundach
+  setTimeout(() => map.removeLayer(histLine), 10000);
+  switchTab('info');
+}
+
+document.getElementById('btnClearHistory').addEventListener('click', () => {
+  if (!confirm('Usunąć całą historię sesji?')) return;
+  sessions = [];
+  localStorage.removeItem('dt_sessions_v3');
+  renderHistory();
+  showToast('Historia wyczyszczona');
+});
+
+renderHistory();
 
 // ─── PWA HINT ─────────────────────────────────────────────────────────────────
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone && !localStorage.getItem('pwa_hint')) {
