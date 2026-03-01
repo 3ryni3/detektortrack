@@ -139,7 +139,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 .legend-dot{width:8px;height:8px;border-radius:50%}
 
 .leaflet-tile{filter:brightness(0.85) saturate(0.8)}
-#map.pick-mode, #map.pick-mode .leaflet-grab, #map.pick-mode .leaflet-interactive { cursor: crosshair !important; }
+#map.pick-mode, #map.pick-mode .leaflet-grab { cursor: crosshair !important; }
 .leaflet-control-attribution{display:none}
 .leaflet-control-zoom a{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
 select option{background:var(--card)}
@@ -183,14 +183,14 @@ select option{background:var(--card)}
     <div class="fab-btn" id="btnTrackToggle" title="Nagrywaj ślad">⬤</div>
     <div class="fab-btn" id="btnAddFind" title="Dodaj znalezisko">✦</div>
     <div class="fab-btn" id="btnWmsToggle" title="Warstwa działek z Geoportalu">⊞</div>
-    <div class="fab-btn" id="btnPickParcel" title="Kliknij działkę na mapie aby ją dodać">👆</div>
+    <div class="fab-btn" id="btnPickParcel" title="Kliknij działkę na mapie">👆</div>
   </div>
   <div class="wms-badge" id="wmsBadge">⊞ DZIAŁKI GEOPORTAL</div>
 </div>
 <div class="boundary-alert" id="boundaryAlert"></div>
 <div class="boundary-banner" id="boundaryBanner">⚠ POZA GRANICĄ DZIAŁKI!</div>
-<div id="pickBanner" style="display:none;position:fixed;top:58px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0d0f0e;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;padding:8px 20px;border-radius:4px;z-index:9992;letter-spacing:1px;box-shadow:0 2px 12px rgba(200,168,75,0.5);white-space:nowrap">
-  👆 KLIKNIJ DZIAŁKĘ NA MAPIE &nbsp;<span id="pickBannerClose" style="cursor:pointer;opacity:0.8;font-size:14px">✕</span>
+<div id="pickBanner" style="display:none;position:fixed;top:58px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0d0f0e;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;padding:8px 20px;border-radius:4px;z-index:9992;letter-spacing:1px;white-space:nowrap;box-shadow:0 2px 12px rgba(200,168,75,0.4)">
+  👆 KLIKNIJ DZIAŁKĘ NA MAPIE &nbsp;<span id="pickBannerClose" style="cursor:pointer;opacity:0.8">✕</span>
 </div>
 
 <div class="bottom-panel">
@@ -247,17 +247,9 @@ select option{background:var(--card)}
   <!-- DZIAŁKA SEARCH -->
   <div class="tab-content" id="tab-parcel">
     <div class="section-title">Szukaj działki z Geoportalu</div>
-    <button class="btn success" id="btnPickParcelTab" style="width:100%;justify-content:center;margin-bottom:6px;padding:10px 12px;font-size:12px">
-      👆 KLIKNIJ DZIAŁKĘ NA MAPIE
-    </button>
-    <div style="font-size:9px;color:var(--muted);line-height:1.5;margin-bottom:8px">
-      Włącz warstwę działek (⊞), przybliż do zoom 15+, następnie kliknij dowolną działkę bezpośrednio na mapie.
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span style="font-size:9px;color:var(--muted)">LUB WPISZ TERYT</span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-    </div>
+    <button class="btn success" id="btnPickParcelTab" style="width:100%;justify-content:center;margin-bottom:6px;padding:10px;font-size:12px">👆 KLIKNIJ DZIAŁKĘ NA MAPIE</button>
+    <div style="font-size:9px;color:var(--muted);margin-bottom:8px;line-height:1.5">Włącz warstwę działek (⊞), przybliż mapę, potem kliknij działkę.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:9px;color:var(--muted)">LUB WPISZ TERYT</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
     <div class="search-hint">
       Podaj TERYT działki w formacie: <span style="color:var(--accent)">WWPPGGRROO.NUMER</span><br>
       np. <span style="color:var(--accent2)">3209011.0003.18/1</span> (woj.32, pow.09, gm.011, obr.0003, nr 18/1)
@@ -597,12 +589,12 @@ document.getElementById('btnAddParcel').addEventListener('click', () => {
   if (currentParcelLayer) map.removeLayer(currentParcelLayer);
   currentParcelLayer = L.geoJSON(currentParcelGeoJSON, { style:{ color:'#c8a84b', weight:2, fillOpacity:0.08, dashArray:'6 4' } }).addTo(map);
   zoneLayers.push(currentParcelLayer);
-  fitParcel(currentParcelLayer);
+  fitMap(currentParcelLayer);
   showToast('Działka dodana do mapy');
 });
 
 document.getElementById('btnFitParcel').addEventListener('click', () => {
-  if (currentParcelLayer) fitParcel(currentParcelLayer);
+  if (currentParcelLayer) fitMap(currentParcelLayer);
 });
 
 // File import
@@ -614,7 +606,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
       const geojson = file.name.endsWith('.kml') ? kmlToGeoJSON(new DOMParser().parseFromString(ev.target.result,'text/xml')) : JSON.parse(ev.target.result);
       const layer = L.geoJSON(geojson, { style:{ color:'#c8a84b', weight:2, fillOpacity:0.08, dashArray:'6 4' } }).addTo(map);
       zoneLayers.push(layer);
-      fitParcel(layer);
+      fitMap(layer);
       document.getElementById('zoneInfo').textContent = `✓ ${file.name}`;
       showToast('Działka wczytana!');
     } catch(e) { showToast('Błąd pliku'); }
@@ -638,7 +630,7 @@ document.getElementById('btnClearZone').addEventListener('click', () => {
   showToast('Działki usunięte');
 });
 document.getElementById('btnFitZone').addEventListener('click', () => {
-  if (zoneLayers.length) { const group = L.featureGroup(zoneLayers); fitParcel(group); }
+  if (zoneLayers.length) { const group = L.featureGroup(zoneLayers); fitMap(group); }
 });
 
 // ─── PHOTO ────────────────────────────────────────────────────────────────────
@@ -919,136 +911,6 @@ map.on('zoomend', () => {
 
 document.getElementById('btnWmsToggle').addEventListener('click', toggleWms);
 
-// ─── FITPARCEL – wyśrodkuj z uwzględnieniem dolnego panelu ────────────────────
-function fitParcel(layer) {
-  const panel = document.querySelector('.bottom-panel');
-  const panelH = panel ? panel.offsetHeight : 0;
-  map.fitBounds(layer.getBounds(), {
-    paddingTopLeft: [20, 20],
-    paddingBottomRight: [20, 20 + panelH]
-  });
-}
-
-// ─── PICK PARCEL – kliknij działkę na mapie ───────────────────────────────────
-let pickModeActive = false;
-
-function enterPickMode() {
-  pickModeActive = true;
-  document.getElementById('map').classList.add('pick-mode');
-  document.getElementById('pickBanner').style.display = 'block';
-  document.getElementById('btnPickParcel').classList.add('active-state');
-  document.getElementById('btnPickParcelTab').innerHTML = '✕ ANULUJ WYBÓR DZIAŁKI';
-  document.getElementById('btnPickParcelTab').className = 'btn danger';
-  document.getElementById('btnPickParcelTab').style.cssText = 'width:100%;justify-content:center;margin-bottom:6px;padding:10px 12px;font-size:12px';
-  if (!wmsActive) toggleWms();
-}
-
-function cancelPickMode() {
-  pickModeActive = false;
-  document.getElementById('map').classList.remove('pick-mode');
-  document.getElementById('pickBanner').style.display = 'none';
-  document.getElementById('btnPickParcel').classList.remove('active-state');
-  document.getElementById('btnPickParcelTab').innerHTML = '👆 KLIKNIJ DZIAŁKĘ NA MAPIE';
-  document.getElementById('btnPickParcelTab').className = 'btn success';
-  document.getElementById('btnPickParcelTab').style.cssText = 'width:100%;justify-content:center;margin-bottom:6px;padding:10px 12px;font-size:12px';
-}
-
-document.getElementById('btnPickParcel').addEventListener('click', () => {
-  pickModeActive ? cancelPickMode() : enterPickMode();
-});
-document.getElementById('btnPickParcelTab').addEventListener('click', () => {
-  pickModeActive ? cancelPickMode() : enterPickMode();
-});
-document.getElementById('pickBannerClose').addEventListener('click', cancelPickMode);
-
-// Klik na mapę – pobierz działkę przez WMS GetFeatureInfo (nie wymaga CORS proxy)
-// lub przez proxy jeśli WMS nie zwróci geometrii
-map.on('click', async function(e) {
-  if (!pickModeActive) return;
-
-  const lat = e.latlng.lat;
-  const lng = e.latlng.lng;
-
-  showToast('⏳ Szukam działki…');
-
-  try {
-    // Metoda 1: proxy Netlify z parametrem xy (obsługuje GetParcelByXY)
-    const proxyUrl = `${API_BASE}/geoportal?xy=${lng},${lat},4326&request=GetParcelByXY`;
-    let text = '';
-    let ok = false;
-
-    try {
-      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
-      text = await res.text();
-      console.log('[PICK proxy] odpowiedź:', text.substring(0, 400));
-      if (!text.trim().startsWith('-1') && text.includes('\n')) ok = true;
-    } catch(proxyErr) {
-      console.warn('[PICK proxy] błąd proxy:', proxyErr);
-    }
-
-    // Metoda 2: bezpośrednio do ULDK (może nie działać przez CORS – fallback)
-    if (!ok) {
-      try {
-        const uldkUrl = `https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${lng},${lat},4326&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship`;
-        const res2 = await fetch(uldkUrl, { mode: 'cors', signal: AbortSignal.timeout(8000) });
-        text = await res2.text();
-        console.log('[PICK direct] odpowiedź:', text.substring(0, 400));
-        if (!text.trim().startsWith('-1') && text.includes('\n')) ok = true;
-      } catch(directErr) {
-        console.warn('[PICK direct] błąd:', directErr);
-      }
-    }
-
-    if (!ok) {
-      showToast('Brak działki lub błąd serwera – spróbuj ponownie');
-      return;
-    }
-
-    const lines = text.trim().split('\n');
-    if (lines[0].trim() === '-1' || lines.length < 2) {
-      showToast('Brak działki w tym miejscu – kliknij wewnątrz działki');
-      return;
-    }
-
-    // Format odpowiedzi: geom_wkt|teryt|parcel|region|commune|county|voivodeship
-    const parts = lines[1].split('|');
-    const wkt     = (parts[0] || '').trim();
-    const parcel  = (parts[2] || parts[1] || '?').trim();
-    const commune = (parts[4] || '').trim();
-    const county  = (parts[5] || '').trim();
-    const voiv    = (parts[6] || '').trim();
-
-    console.log('[PICK] wkt:', wkt.substring(0,100), '| działka:', parcel);
-
-    const geojson = wktPolygonToGeoJSON(wkt) || wktToGeoJSONMulti(wkt);
-    if (!geojson) {
-      showToast('Błąd parsowania geometrii – sprawdź konsolę');
-      console.error('[PICK] WKT nie sparsowany:', wkt);
-      return;
-    }
-
-    currentParcelGeoJSON = geojson;
-    if (currentParcelLayer) map.removeLayer(currentParcelLayer);
-    currentParcelLayer = L.geoJSON(geojson, {
-      style: { color:'#c8a84b', weight:2, fillOpacity:0.12, dashArray:'6 4' }
-    }).addTo(map);
-    zoneLayers.push(currentParcelLayer);
-    fitParcel(currentParcelLayer);
-
-    document.getElementById('prName').textContent = `Działka: ${parcel}`;
-    document.getElementById('prInfo').textContent = [commune, county, voiv].filter(Boolean).join(', ');
-    document.getElementById('parcelResult').style.display = 'block';
-
-    showToast(`✓ Dodano działkę ${parcel}`);
-    cancelPickMode();
-    switchTab('parcel');
-
-  } catch(err) {
-    console.error('[PICK] błąd:', err);
-    showToast('Błąd – sprawdź połączenie z internetem');
-  }
-});
-
 // ─── BOUNDARY CHECK ───────────────────────────────────────────────────────────
 let boundaryCheckActive = false;
 let wasOutside = false;
@@ -1182,30 +1044,99 @@ document.getElementById('btnClearHistory').addEventListener('click', () => {
   showToast('Historia wyczyszczona');
 });
 
-/*
-  WAŻNE: aby klikanie działek działało przez proxy Netlify,
-  plik netlify/functions/geoportal.js musi obsługiwać parametr &xy=
-  Zaktualizuj go do poniższej wersji:
+// ─── FITMAP – wyśrodkowanie z uwzględnieniem dolnego panelu ──────────────────
+function fitMap(layer) {
+  const panelH = (document.querySelector('.bottom-panel') || {}).offsetHeight || 0;
+  map.fitBounds(layer.getBounds(), {
+    paddingTopLeft:    [20, 20],
+    paddingBottomRight:[20, panelH + 20]
+  });
+}
 
-  exports.handler = async (event) => {
-    const { id, xy, request: req } = event.queryStringParameters || {};
-    let url;
-    if (xy) {
-      // GetParcelByXY – klik na mapie
-      url = `https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${xy}&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship`;
-    } else {
-      // GetParcelById – wyszukiwanie po TERYT
-      url = `https://uldk.gugik.gov.pl/?request=GetParcelById&id=${encodeURIComponent(id)}&result=geom_wkt`;
-    }
+// ─── PICK PARCEL – kliknij działkę na mapie ───────────────────────────────────
+let pickModeActive = false;
+
+function enterPickMode() {
+  pickModeActive = true;
+  document.getElementById('map').classList.add('pick-mode');
+  document.getElementById('pickBanner').style.display = 'block';
+  document.getElementById('btnPickParcel').classList.add('active-state');
+  document.getElementById('btnPickParcelTab').textContent = '✕ ANULUJ WYBÓR';
+  document.getElementById('btnPickParcelTab').className = 'btn danger';
+  document.getElementById('btnPickParcelTab').style.cssText = 'width:100%;justify-content:center;margin-bottom:6px;padding:10px;font-size:12px';
+  if (!wmsActive) toggleWms();
+  showToast('Kliknij działkę na mapie');
+}
+
+function cancelPickMode() {
+  pickModeActive = false;
+  document.getElementById('map').classList.remove('pick-mode');
+  document.getElementById('pickBanner').style.display = 'none';
+  document.getElementById('btnPickParcel').classList.remove('active-state');
+  document.getElementById('btnPickParcelTab').textContent = '👆 KLIKNIJ DZIAŁKĘ NA MAPIE';
+  document.getElementById('btnPickParcelTab').className = 'btn success';
+  document.getElementById('btnPickParcelTab').style.cssText = 'width:100%;justify-content:center;margin-bottom:6px;padding:10px;font-size:12px';
+}
+
+document.getElementById('btnPickParcel').addEventListener('click', () => {
+  pickModeActive ? cancelPickMode() : enterPickMode();
+});
+document.getElementById('btnPickParcelTab').addEventListener('click', () => {
+  pickModeActive ? cancelPickMode() : enterPickMode();
+});
+document.getElementById('pickBannerClose').addEventListener('click', cancelPickMode);
+
+map.on('click', async function(e) {
+  if (!pickModeActive) return;
+
+  const lat = e.latlng.lat;
+  const lng = e.latlng.lng;
+  showToast('⏳ Szukam działki…');
+
+  // Próba 1: przez proxy Netlify (bez CORS)
+  let text = null;
+  try {
+    const r = await fetch(`${API_BASE}/geoportal?request=GetParcelByXY&xy=${lng},${lat},4326`, {signal: AbortSignal.timeout(8000)});
+    const t = await r.text();
+    if (t.trim().split('\n').length >= 2 && !t.trim().startsWith('-1')) text = t;
+    console.log('[PICK proxy]', t.substring(0,200));
+  } catch(e1) { console.warn('[PICK proxy] błąd:', e1.message); }
+
+  // Próba 2: bezpośrednio do ULDK (działa gdy serwer pozwala CORS)
+  if (!text) {
     try {
-      const res = await fetch(url);
-      const text = await res.text();
-      return { statusCode: 200, headers: { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' }, body: text };
-    } catch(e) {
-      return { statusCode: 500, body: 'Błąd proxy: ' + e.message };
-    }
-  };
-*/
+      const r2 = await fetch(`https://uldk.gugik.gov.pl/?request=GetParcelByXY&xy=${lng},${lat},4326&result=geom_wkt,teryt,parcel,region,commune,county,voivodeship`, {signal: AbortSignal.timeout(8000)});
+      const t2 = await r2.text();
+      if (t2.trim().split('\n').length >= 2 && !t2.trim().startsWith('-1')) text = t2;
+      console.log('[PICK direct]', t2.substring(0,200));
+    } catch(e2) { console.warn('[PICK direct] błąd:', e2.message); }
+  }
+
+  if (!text) { showToast('Brak działki w tym miejscu'); return; }
+
+  const lines = text.trim().split('\n');
+  const parts  = lines[1].split('|');
+  const wkt    = (parts[0] || '').trim();
+  const parcel = (parts[2] || parts[1] || '?').trim();
+  const info   = [parts[4], parts[5], parts[6]].filter(Boolean).map(s=>s.trim()).join(', ');
+
+  const geojson = wktPolygonToGeoJSON(wkt) || wktToGeoJSONMulti(wkt);
+  if (!geojson) { showToast('Błąd geometrii działki'); console.error('[PICK] wkt:', wkt); return; }
+
+  currentParcelGeoJSON = geojson;
+  if (currentParcelLayer) map.removeLayer(currentParcelLayer);
+  currentParcelLayer = L.geoJSON(geojson, {style:{color:'#c8a84b',weight:2,fillOpacity:0.12,dashArray:'6 4'}}).addTo(map);
+  zoneLayers.push(currentParcelLayer);
+  fitMap(currentParcelLayer);
+
+  document.getElementById('prName').textContent = `Działka: ${parcel}`;
+  document.getElementById('prInfo').textContent = info;
+  document.getElementById('parcelResult').style.display = 'block';
+
+  showToast(`✓ Dodano działkę ${parcel}`);
+  cancelPickMode();
+  switchTab('parcel');
+});
  ─────────────────────────────────────────────────────────────────
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone && !localStorage.getItem('pwa_hint')) {
   setTimeout(()=>{
