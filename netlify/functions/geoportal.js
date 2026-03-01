@@ -1,24 +1,32 @@
 // netlify/functions/geoportal.js
-// Proxy dla Geoportalu – omija blokadę CORS
-exports.handler = async (event) => {
-  const { gmina, obreb, numer } = event.queryStringParameters || {};
+// Proxy dla Geoportalu ULDK API – poprawiona wersja
 
-  if (!numer) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Brak numeru działki' }) };
+exports.handler = async (event) => {
+  const params = event.queryStringParameters || {};
+  const id = params.id;
+
+  if (!id) {
+    return {
+      statusCode: 400,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: 'Brak identyfikatora działki' })
+    };
   }
 
-  // Budujemy zapytanie WFS do Geoportalu (ULDK API)
-  const query = encodeURIComponent(numer);
-  const obrebParam = obreb ? `&obreb=${encodeURIComponent(obreb)}` : '';
-  const gminaParam = gmina ? `&gmina=${encodeURIComponent(gmina)}` : '';
+  const url = `https://uldk.gugik.gov.pl/?request=GetParcelById&id=${encodeURIComponent(id)}&result=geom_wkt,teryt,voivodeship,county,commune,region,parcel&srid=4326`;
 
-  const url = `https://uldk.gugik.gov.pl/?request=GetParcelById&id=${query}${obrebParam}${gminaParam}&result=geom_wkt,teryt,voivodeship,county,commune,region,parcel&srid=4326`;
+  console.log('Zapytanie ULDK:', url);
 
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'DetektorTrack/2.0' }
+      headers: {
+        'User-Agent': 'Mozilla/5.0 DetektorTrack/3.0',
+        'Accept': 'text/plain',
+      }
     });
+
     const text = await response.text();
+    console.log('Odpowiedź ULDK (pierwsze 300 znaków):', text.substring(0, 300));
 
     return {
       statusCode: 200,
@@ -29,9 +37,11 @@ exports.handler = async (event) => {
       body: text,
     };
   } catch (err) {
+    console.error('Błąd ULDK:', err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Błąd połączenia z Geoportalem', details: err.message }),
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify({ error: err.message }),
     };
   }
 };
